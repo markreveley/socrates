@@ -30,6 +30,13 @@ Read in order:
    tutorial), and why the transfer is a ratification workload, not a
    migration. Filed with [`plans/0001-post-build-review.md`](../plans/0001-post-build-review.md),
    the post-build review of the code, docs, and tutorial.
+5. [**05-restatement.md**](05-restatement.md) — a design response to an
+   operator prompt on ratification fatigue: the operator restating the
+   graph in their own words, closed-book, committed to the ledger as
+   evidence of comprehension — the missing quadrant beside
+   `intake`/`add`/`re-prose`, the judge-eval corrected to
+   judge-as-annotator, the dosage that avoids T5-at-volume, and a
+   zero-build version that fits inside week one.
 
 Alongside the reading order:
 [**code-walkthrough.md**](code-walkthrough.md) — the tutorial: the 0001
