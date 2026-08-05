@@ -62,11 +62,16 @@ does not exist yet — it is the first M0 deliverable, written as
 (`Socrates.Loadout`) that carries the same facts as data: the type list, the
 JSON schema sent to the API, and the system prompt assembly.
 
-- **Types: `def`, `claim`, `ref`.** Exactly what the canonical example plus
-  structural necessity evidences. The v1 vocabulary is deliberately *not*
-  imported. **Growth rule:** a new type is a loadout edit made through use —
-  proposed, ratified, journaled — the naive-emergence method, this time with a
-  record.
+- **Types: `def`, `ref`, `attest`, `infer`, `act`, `did`.** Ratified
+  2026-08-05 from the two canonical examples: `attest`/`infer`/`act`/`did`
+  carve at functional roles (assert / conclude / prescribe / record); `def` and
+  `ref` remain machinery types (ratified stipulations; anchored pointers). The
+  first canon example's `[claim_n]` statements read as `attest` under this set.
+  **Implicit-conjunction rule (ratified):** multiple deps bind jointly, so
+  conjunction-only statements decompose away. The v1 vocabulary is deliberately
+  *not* imported. **Growth rule:** a new type is a loadout edit made through
+  use — proposed, ratified, journaled — the naive-emergence method, this time
+  with a record.
 - **Model-suppliable fields:** `display_id`, `type`, `body`, `term` (defs),
   `scope` (defs: `local | global`), `deps` (list of display_ids), `notes` (list;
   the `{}` meta-channel), `origin` (refs: `{kind, locator}`).
@@ -103,7 +108,7 @@ statement. Hard errors and advisory warnings are distinct.
 
 | Code | Check |
 |---|---|
-| `E_ID_FORM` | `display_id` matches `^(def\|claim\|ref)_\d+$` and prefix equals `type` |
+| `E_ID_FORM` | `display_id` matches `^(def\|ref\|attest\|infer\|act\|did)_\d+$` and prefix equals `type` |
 | `E_DUP_ID` | display_ids unique within the exchange |
 | `E_DANGLING_DEP` | every dep resolves to an existing statement |
 | `E_CYCLE` | dependency graph is acyclic (DFS; the cycle path is printed) |
@@ -217,11 +222,7 @@ multi-loadout switching · elixir-mind coupling. All designed, none built here.
   `"state": "ratified"`; the operator types `socrates ratify <id>`, never the
   glyph; nothing ever parses it. (`--ascii` render flag may fall back to `|-`.)
 
-## Open question — type set revision (operator-proposed 2026-08-05)
-
-Proposed replacement/supplement for the v0 types, from the operator's
-practical-syllogism example (`canon/practical-syllogism.md` if adopted):
-`attest` / `infer` / `act` (prescription) / `did` (record), retaining `def` and
-`ref` as machinery types. Under evaluation; the loadout section above is
-superseded by whatever this resolves to. See canon annotations for the gate
-findings the example itself carries.
+- **D5 — type set `def / ref / attest / infer / act / did`**, plus the
+  implicit-conjunction rule, from the operator's practical-syllogism example
+  (`canon/practical-syllogism.md`, now canonical). **Ratified 2026-08-05.**
+  The loadout section above reflects it.

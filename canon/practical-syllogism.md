@@ -1,12 +1,12 @@
 ---
-title: "Canonical example (proposed) — practical syllogism"
+title: "Canonical example — practical syllogism"
 authorship: operator
 fidelity: verbatim
-status: proposed — supplements or revises the v0 type set; see plans/0001 → Open question
+status: canonical — ratified 2026-08-05 (plans/0001 → D5)
 source: master thread, 2026-08-05
 ---
 
-# Proposed canonical example — the practical syllogism
+# Canonical example — the practical syllogism
 
 **Operator-authored. Offered as a supplement to the first canonical example and
 as perspective on the type set.** Everything below the rule is verbatim — do not
@@ -43,7 +43,7 @@ mechanical findings, which is the system's argument made by its own examples:
    two directly. Candidate rule for the loadout: *multiple deps are implicit
    conjunction; conjunction-only statements decompose away.*
 
-## What the example settles (if ratified)
+## What the example settled (ratified 2026-08-05)
 
 - Types carve at **functional roles** (assert / conclude / prescribe / record),
   not epistemic gradations — v1's claim/belief/evidence/observation collapse
