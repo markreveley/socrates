@@ -1,0 +1,12 @@
+/_build/
+/deps/
+/doc/
+/cover/
+erl_crash.dump
+*.ez
+/socrates
+socrates-*.tar
+
+# the dogfood store is initialized by the operator after accepting the build;
+# scenario walks and tests run in scratch/tmp directories only
+/.socrates/
