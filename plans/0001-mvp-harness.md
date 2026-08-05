@@ -152,6 +152,11 @@ Request shape (hand-assembled):
 Every command prints a boundary footer: `[deterministic]` or
 `[inference: model · request-id · tokens in/out]`.
 
+**Output discipline (D6):** stdout carries only the artifact — renders, JSON,
+query results — so every command pipes cleanly into ordinary Unix tooling.
+The boundary footer, progress notes, and gate warnings go to **stderr**;
+status goes in exit codes. Pipe-cleanliness is a guarantee, not an accident.
+
 Deterministic: `add`, `amend`, `show`, `deps`, `rdeps`, `graph`, `render`,
 `ratify`, `reject`, `verify`, `log`.
 Inference: `intake`. (That is the complete list. One generative door.)
@@ -226,3 +231,12 @@ multi-loadout switching · elixir-mind coupling. All designed, none built here.
   implicit-conjunction rule, from the operator's practical-syllogism example
   (`canon/practical-syllogism.md`, now canonical). **Ratified 2026-08-05.**
   The loadout section above reflects it.
+- **D6 — output discipline:** stdout artifact-only; footer, progress, and
+  warnings to stderr; status in exit codes. **Ratified 2026-08-05.**
+
+## Spinouts
+
+- **Statement content digests** — tamper-evidence for the whole journal,
+  extending zero-network `verify` from sources and ref origins to every
+  statement. Deferred to `plans/0002-statement-digests.md`; implement after
+  the MVP milestones.
