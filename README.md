@@ -58,6 +58,10 @@ Canon (operator-authored, verbatim, annotated):
 example and acceptance fixture ·
 [practical-syllogism](canon/practical-syllogism.md) — settled the type set.
 
+Explanatory (non-normative): [docs/](docs/README.md) — purpose and
+architecture in plain words, plus a research spike testing the core claims
+against outside evidence.
+
 The session all of this descends from is captured verbatim as the **master
 thread** at `direction → socrates_2/threads/2026-08-05-master-thread.md`. This
 repo succeeds `ob6to8/socrates` (v1); nothing from v1 is imported — the
