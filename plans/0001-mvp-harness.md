@@ -158,9 +158,16 @@ query results — so every command pipes cleanly into ordinary Unix tooling.
 The boundary footer, progress notes, and gate warnings go to **stderr**;
 status goes in exit codes. Pipe-cleanliness is a guarantee, not an accident.
 
-Deterministic: `add`, `amend`, `show`, `deps`, `rdeps`, `graph`, `render`,
-`ratify`, `reject`, `verify`, `log`.
+Deterministic: `init`, `add`, `amend`, `show`, `deps`, `rdeps`, `graph`,
+`render`, `ratify`, `reject`, `verify`, `log`.
 Inference: `intake`. (That is the complete list. One generative door.)
+
+**The complete interface — every argument, flag, and output contract — is
+[`spec/cli-v0.md`](../spec/cli-v0.md); worked usage with expected behavior is
+[`spec/scenarios-v0.md`](../spec/scenarios-v0.md). Both are normative for this
+build.** Details pinned there and binding here: store discovery is
+`./.socrates` in the cwd only (`init` creates it; no ancestor walking); `add`
+auto-assigns display ids (next free index per type).
 
 - `add` — operator authors a statement directly (flags or stdin). Lint only,
   journaled with `author: operator`. Operator statements enter `ratified`
@@ -200,7 +207,8 @@ Inference: `intake`. (That is the complete list. One generative door.)
 Each milestone is independently usable; later ones never break earlier surfaces.
 
 - **M0 — scaffold.** Mix project, `spec/loadout-v0.md`, this plan ratified.
-  (Canon and plan are already filed.)
+  (Canon, this plan, `spec/cli-v0.md`, and `spec/scenarios-v0.md` are already
+  filed — the loadout is the remaining M0 deliverable.)
 - **M1 — the pen.** `Statement`, `Sid`, `Journal`, and `add / show / render /
   log`. **Dogfooding starts here, with no API key:** the operator can begin
   authoring socrates-in-socrates directly. The human write path ships before
@@ -216,7 +224,9 @@ Each milestone is independently usable; later ones never break earlier surfaces.
 ## Acceptance — the canonical example is the test
 
 Under the ratified type set (D5), intake of canon #1 emits `attest_n` display
-ids; `claim_2` and `def_0` below name the canon lines themselves.
+ids; `claim_2` and `def_0` below name the canon lines themselves. Scenarios
+4–7 in `spec/scenarios-v0.md` are the walked form of this section — passing
+them (by test harness or by hand) is passing acceptance.
 
 1. `socrates add` the companion `def_0` (from canon) → journaled, renders.
 2. `socrates intake` the canonical block → the gate must find **exactly**

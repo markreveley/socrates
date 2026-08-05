@@ -26,8 +26,9 @@ ratified — comprehension events — not tokens generated.
 
 ## Architecture — four layers
 
-1. **The language** — types, fields, notation: the loadout (`spec/`, written
-   at M0). Ratified type set: `def / ref / attest / infer / act / did`.
+1. **The language** — types, fields, notation: the loadout (`spec/` — the CLI
+   reference and scenarios are filed; the loadout itself lands at M0).
+   Ratified type set: `def / ref / attest / infer / act / did`.
 2. **The store** — an append-only journal plus write-once verbatim sources
    (`.socrates/`). The notation is a view; the JSON is canonical.
 3. **The gate** — the language compiled into executable checks: the compiler
