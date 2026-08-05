@@ -15,18 +15,26 @@ expected behavior; the two documents are read together.
 - **Store discovery:** commands operate on `./.socrates/` in the current
   working directory — no ancestor walking in v0. Missing store → exit `2` with
   `no .socrates here (run: socrates init)` on stderr.
+- **Exchanges:** `init` opens exchange `1`, the operator's standing exchange;
+  `add` and `amend` stamp it. Each `intake` opens the next integer exchange.
 - **Output discipline (D6):** stdout carries only the artifact (renders, ids,
   query results). The boundary footer, progress, gate errors/warnings, and
   confirmations go to stderr. stdout is always pipe-clean.
 - **Boundary footer (stderr, last line of every command):**
   - `[deterministic]`
   - `[inference: <model> · <request-id> · <n> in / <m> out]`
+  - `[inference: fixture · - · 0 in / 0 out]` (fixture client — provenance is
+    honest, never a model id)
 - **Exit codes:** `0` ok · `1` gate-rejected (after retries, or human `add`
   failing lint) · `2` usage / environment error · `3` verify mismatch.
 - **Environment:** `ANTHROPIC_API_KEY` (required by `intake` only).
   `SOCRATES_MODEL` overrides the model (default `claude-opus-5`).
-- **Ids in arguments** are display ids (`attest_3`) scoped to the current
-  graph; sids are accepted anywhere a display id is.
+  `SOCRATES_CLIENT=fixture[:<path>]` selects the fixture client — canned
+  responses, honest provenance (`model: fixture`); default `anthropic`.
+- **Ids in arguments** are display ids (`attest_3`) — store-global and unique
+  for the life of the store (D7: app-assigned at acceptance); a `revises`
+  chain shares its display id, which resolves to the chain's live head. Sids
+  are accepted anywhere a display id is.
 
 ## Selectors
 
@@ -50,8 +58,9 @@ topological order, defs and refs first.
 ## Commands — deterministic
 
 ### `socrates init`
-Creates `.socrates/` (empty journal, `definitions.json`, `sources/`). Errors
-exit `2` if the store already exists. No flags.
+Creates `.socrates/` (empty journal, `definitions.json`, `sources/`) and
+journals `exchange_opened` for exchange `1`, the operator's standing exchange.
+Errors exit `2` if the store already exists. No flags.
 
 ### `socrates add`
 Author one statement directly. Enters `ratified` (authorship is assent).
@@ -73,8 +82,10 @@ stdout: the new statement's display id and sid, one line: `attest_5 <sid>`.
 Lint failure: nothing journaled, errors to stderr, exit `1`.
 
 ### `socrates amend <id>`
-Same flags as `add` (type is fixed to the original's). Journals a new
-statement carrying a `revises` edge; the original flips to `superseded`.
+Same flags as `add` (type is fixed to the original's). Journals
+`statement_added` (the replacement, keeping the original's display id — the
+`revises` chain shares it, D7) then `state_changed` (the original →
+`superseded`).
 stdout: `attest_5 <new-sid> revises <old-sid>`.
 
 ### `socrates show <id>`
@@ -101,9 +112,15 @@ Transitioning a non-`proposed` statement: error, exit `2`, nothing journaled.
 ### `socrates verify`
 Re-hashes every archived source and every ref origin against recorded digests.
 Reports per-file status to stderr; any mismatch → exit `3`. Zero network.
+Archive layout (pinned): `sources/<exchange>/source.txt`, `response-<n>.json`
+(one per client call, fixture included), `rejected-<n>.json`. The summary counts files:
+`sources: <n> files ok`.
 
 ### `socrates log [--limit <n>]`
 Journal events, newest last: timestamp, event kind, ids. Default limit 50.
+Event lines: `<ts> statement_added <display-id> <sid> [revises <sid>]` ·
+`<ts> state_changed <sid> <state>` · `<ts> exchange_opened @<n>` ·
+`<ts> intake_rejected @<n>`.
 
 ## Commands — inference
 

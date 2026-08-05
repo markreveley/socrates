@@ -10,7 +10,7 @@ decides: language=elixir, scope=minimum-viable dogfooding loop
 **Status: `ratified` (2026-08-05). This document is the exact first build:**
 run the milestones in order, satisfy the acceptance section, and stop. Sibling
 plans 0002–0006 are designed but explicitly **not** part of this build.
-Decisions D1–D6 below are ratified.
+Decisions D1–D7 below are ratified.
 
 This document is self-contained — implementable without access to the thread that
 produced it. Context in one paragraph: socrates is a type system for statements.
@@ -75,12 +75,25 @@ JSON schema sent to the API, and the system prompt assembly.
   with a record.
 - **Model-suppliable fields:** `display_id`, `type`, `body`, `term` (defs),
   `scope` (defs: `local | global`), `deps` (list of display_ids), `notes` (list;
-  the `{}` meta-channel), `origin` (refs: `{kind, locator}`).
+  the `{}` meta-channel), `origin` (refs: `{kind, locator}`). Under D7,
+  `display_id` and `deps` are **artifact-local names**: the gate validates them
+  within the proposal, and the app assigns final store-global display ids at
+  acceptance, rewriting internal dep references and journaling the mapping.
 - **App-stamped fields (never in the model schema):** `sid` (ULID —
   `Socrates.Sid`, ~40 lines, no dep), `exchange`, `seq`, `state`
   (`proposed | ratified | rejected | superseded`), `revises`, `author`
   (`operator | model`), `provenance`, `inserted_at`. Ref `origin.sha256` is
-  computed by the app at gate time — measured, never trusted.
+  computed by the app at gate time — measured, never trusted. The final
+  `display_id` is likewise app-assigned at acceptance — next free index per
+  type, store-global, unique for the life of the store (D7); a `revises`
+  chain shares one display id, resolving to the chain's live head.
+- **The loadout must pin (audit §C):** in statement bodies `*…*` is reserved
+  for terms — emphasis asterisks are normalized away on entry (canon's own
+  def_0 body carries `*before*` as emphasis); the API schema's subset choice
+  (`anyOf` per-type shapes or permissive-plus-gate; `additionalProperties:
+  false` throughout; no `minLength`/`pattern`); the definitions block in the
+  system prompt carries each def's display id; model-artifact deps resolve
+  against artifact-local ids ∪ global defs only — anything else dangles.
 
 ## Store
 
@@ -92,7 +105,7 @@ Lives at `.socrates/` in whatever repo the operator runs in — for dogfooding,
   journal.jsonl        # events: exchange_opened | statement_added |
                        #         state_changed | intake_rejected
   sources/<exchange>/  # verbatim prose + raw model responses, write-once
-  definitions.json     # :global defs, promoted on ratification
+  definitions.json     # derived export: term → live ratified :global def
 ```
 
 - **Deterministic serializer:** `Socrates.Journal.encode/1` owns field order
@@ -101,6 +114,14 @@ Lives at `.socrates/` in whatever repo the operator runs in — for dogfooding,
   folding the journal twice yields identical state. `fsync` on every append.
 - **State rebuild:** fold journal → `%{sid => statement}` + adjacency (deps and
   reverse-deps). Cheap at MVP scale; no cache, no index.
+- **Deps are sid-edges** (D7): resolved from display ids at write time — `add`
+  resolves against the store, the gate resolves model artifacts against what
+  the model can see (artifact-local ids ∪ global defs). Display ids are
+  view-layer.
+- **`definitions.json` is a derived export** of the fold —
+  `{term → latest live ratified :global def}` — regenerated on every fold and
+  never read as authority: the gate and the loadout read the fold (audit B2).
+  Promotion-on-amend falls out for free.
 
 ## The gate (`Socrates.Gate`)
 
@@ -110,7 +131,7 @@ statement. Hard errors and advisory warnings are distinct.
 | Code | Check |
 |---|---|
 | `E_ID_FORM` | `display_id` matches `^(def\|ref\|attest\|infer\|act\|did)_\d+$` and prefix equals `type` |
-| `E_DUP_ID` | display_ids unique within the exchange |
+| `E_DUP_ID` | display_ids unique within the artifact (final ids are app-assigned, store-global — D7) |
 | `E_DANGLING_DEP` | every dep resolves to an existing statement |
 | `E_CYCLE` | dependency graph is acyclic (DFS; the cycle path is printed) |
 | `E_TERM_UNDEF` | every `*term*` used in a body has a def in scope or in the definitions file |
@@ -147,6 +168,15 @@ Request shape (hand-assembled):
   gate re-checks everything anyway.
 - **Provenance recorded per call:** sha256 of the exact request body bytes,
   `request-id` response header, `usage`, model, timestamp.
+- **`stop_reason` checked before parsing** (audit B3): anything but `end_turn`
+  — `max_tokens` truncation (thinking counts against the cap on this model) or
+  `refusal` — fails loudly: raw response archived, rejection journaled, nonzero
+  exit; never fed to the gate as if complete. Transport/API failure (Req does
+  not retry POSTs) exits `2` with the error on stderr.
+- **Escript TLS** (audit B1): castore's CA bundle lives in a `priv/` dir
+  escripts do not ship (req#299), so the client passes
+  `connect_options: [transport_opts: [cacerts: :public_key.cacerts_get()]]` —
+  the OS trust store, available because OTP ≥ 27 is pinned.
 
 ## Command surface
 
@@ -224,20 +254,26 @@ Each milestone is independently usable; later ones never break earlier surfaces.
 ## Acceptance — the canonical example is the test
 
 Under the ratified type set (D5), intake of canon #1 emits `attest_n` display
-ids; `claim_2` and `def_0` below name the canon lines themselves. Scenarios
+ids (model-proposed, app-finalized under D7); `claim_2` and `def_0` below name
+the canon lines themselves. Scenarios
 4–7 in `spec/scenarios-v0.md` are the walked form of this section — passing
 them (by test harness or by hand) is passing acceptance.
 
 1. `socrates add` the companion `def_0` (from canon) → journaled, renders.
-2. `socrates intake` the canonical block → the gate must find **exactly**
-   `E_TERM_UNDEF` on claim_2's coined term (and `E_DANGLING_DEP` for `def_0` if
-   step 1 is skipped). The repair loop either mints the missing def or fails
-   visibly with the artifact saved.
+2. `socrates intake` the canonical block. **The exact walk is
+   fixture-canonical** (audit A3): under `SOCRATES_CLIENT=fixture` with the
+   canned first response, the gate finds `E_TERM_UNDEF` on claim_2's coined
+   term and the repair loop mints the missing def — scenario 4 verbatim. A
+   **live** run passes iff intake either surfaces gate findings the repair
+   loop resolves within 2 rounds, or passes clean with the coined term
+   defined.
 3. `ratify` all → `render` shows `⊢` on every statement; any `:global` defs
    appear in `definitions.json`.
 4. `verify` passes; folding the journal twice produces identical state.
 5. Forced-failure fixture → exit `1`, `rejected-*.json` on disk,
    `intake_rejected` in the journal.
+6. At least one live `intake` runs **from the built escript**, not `mix` —
+   the TLS path is escript-specific (audit B1; see Inference: escript TLS).
 
 ## Non-goals (MVP)
 
@@ -261,6 +297,15 @@ multi-loadout switching · elixir-mind coupling. All designed, none built here.
   The loadout section above reflects it.
 - **D6 — output discipline:** stdout artifact-only; footer, progress, and
   warnings to stderr; status in exit codes. **Ratified 2026-08-05.**
+- **D7 — display identity is app-assigned and store-global.** Model display
+  ids are artifact-local names; at acceptance the app assigns final display
+  ids (next free index per type, store-global, unique for the life of the
+  store), rewrites internal dep references, journals the mapping, and stores
+  deps as sid-edges. A `revises` chain shares one display id, resolving to
+  the live head; gate and repair messages speak the model's artifact-local
+  ids. **Ratified 2026-08-05** — proposed in
+  [`plans/0001-audit.md`](0001-audit.md) (option B), applied on operator
+  instruction.
 
 ## Spinouts
 
