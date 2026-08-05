@@ -31,7 +31,15 @@ defmodule Socrates.LoadoutTest do
     end
 
     test "no minLength, pattern, or numeric constraints anywhere" do
-      refute find_key(Loadout.schema(), ["minLength", "maxLength", "pattern", "minimum", "maximum", "minItems", "maxItems"])
+      refute find_key(Loadout.schema(), [
+               "minLength",
+               "maxLength",
+               "pattern",
+               "minimum",
+               "maximum",
+               "minItems",
+               "maxItems"
+             ])
     end
 
     test "def branch requires term and scope; ref branch requires origin" do
@@ -43,8 +51,10 @@ defmodule Socrates.LoadoutTest do
       assert def_b["properties"]["scope"]["enum"] == ["local", "global"]
       assert "origin" in ref_b["required"]
       assert ref_b["properties"]["origin"]["required"] == ["kind", "locator"]
+
       assert ref_b["properties"]["origin"]["properties"]["kind"]["enum"] ==
                ["file", "url", "exchange", "quote"]
+
       assert attest_b["required"] == ["display_id", "type", "body", "deps", "notes"]
     end
 
@@ -72,7 +82,11 @@ defmodule Socrates.LoadoutTest do
     test "definitions block carries each def's display id" do
       block =
         Loadout.definitions_block([
-          %{display_id: "def_1", term: "representation ratification", body: "the operator verifying"}
+          %{
+            display_id: "def_1",
+            term: "representation ratification",
+            body: "the operator verifying"
+          }
         ])
 
       assert block =~ "[def_1] *representation ratification*: the operator verifying"
