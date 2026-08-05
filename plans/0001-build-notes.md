@@ -163,4 +163,34 @@ logged it here. Nothing in this file edits a ratified document; every item is
   journaled per-call `model` is taken from the response (what actually
   served), which is also what the footer shows.
 
-(M4 appends here.)
+## M4 — amend and finish
+
+- **N29. Amend semantics** (audit left them open): the target must be live —
+  amending a `superseded` sid errors pointing at the live head; amending a
+  `rejected` statement errors (reject is a verdict; author fresh instead).
+  Amending a `proposed` model statement is allowed as an operator rewrite;
+  the replacement is operator-authored and therefore enters `ratified`,
+  stamps exchange 1, and supersedes the proposal.
+- **N30. Amend takes the full replacement:** the same flags as `add` minus
+  `--type` (the type is fixed to the original's; passing `--type` is an
+  unknown-option usage error). Nothing is inherited — a def amend requires
+  `--term`/`--scope` again; deps not restated are dropped. Deliberate:
+  supersession replaces a statement, and re-typing is the price of the
+  journaled record.
+- **N31. Amend runs the full gate** including a chain-aware cycle check:
+  the live graph is checked with the chain's edges swapped for the
+  candidate's, so a replacement cannot close a loop through its own
+  dependents (`E_CYCLE`, exit 1, nothing journaled).
+- **N32. Scenario-6 tamper walk note:** `truncate`-restoring the tampered
+  byte restores verification (digests are content digests; no mtime
+  anywhere).
+
+## Acceptance
+
+- Acceptance step 6 (one live `intake` from the built escript) requires
+  `ANTHROPIC_API_KEY`, which this build session did not hold. Steps 1–5
+  and the full scenario 1–7 walks ran from the built escript (transcripts
+  in the PR); **step 6 is pending the operator's run**:
+  `MIX_ENV=prod mix escript.build && ANTHROPIC_API_KEY=… ./socrates intake <file>`
+  in a scratch store. No live transcript is included because none was run —
+  provenance is not fabricated here of all places.

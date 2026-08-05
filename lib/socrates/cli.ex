@@ -39,6 +39,7 @@ defmodule Socrates.CLI do
     case argv do
       ["init" | rest] -> cmd_init(rest)
       ["add" | rest] -> with_store(rest, &cmd_add/2)
+      ["amend" | rest] -> with_store(rest, &cmd_amend/2)
       ["show" | rest] -> with_store(rest, &cmd_show/2)
       ["deps" | rest] -> with_store(rest, &cmd_deps(&1, &2, :deps))
       ["rdeps" | rest] -> with_store(rest, &cmd_deps(&1, &2, :rdeps))
@@ -59,6 +60,7 @@ defmodule Socrates.CLI do
     usage: socrates <command> [args]
       init                      create ./.socrates
       add --type <t> [flags]    author one statement (body via --body or stdin)
+      amend <id> [flags]        author a replacement (supersession, never mutation)
       show <id>                 full record for one statement
       deps <id> [--all]         direct (or transitive) dependencies
       rdeps <id> [--all]        direct (or transitive) dependents
@@ -144,7 +146,101 @@ defmodule Socrates.CLI do
     end
   end
 
-  # Shared by add (and amend at M4): flags → linted statement, deps resolved
+  ## amend
+
+  @amend_switches Keyword.delete(@add_switches, :type)
+
+  defp cmd_amend(rest, ctx) do
+    {opts, args} = args_only(rest, 1, @amend_switches)
+
+    id =
+      case args do
+        [id] -> id
+        [] -> abort("usage: socrates amend <id> [flags]", 2)
+      end
+
+    old = resolve(ctx.fold, id) || abort("unknown id: #{id}", 2)
+
+    case old.state do
+      "superseded" ->
+        abort(
+          "cannot amend superseded #{old.display_id} (live head: #{Journal.head(ctx.fold, old.display_id).sid})",
+          2
+        )
+
+      "rejected" ->
+        abort("cannot amend rejected #{old.display_id}", 2)
+
+      _ ->
+        :ok
+    end
+
+    case statement_from_flags(opts, ctx, old.type) do
+      {:error, errors} ->
+        Enum.each(errors, &print_finding/1)
+        1
+
+      {:ok, s, warnings} ->
+        case revised_cycle(ctx.fold, old.display_id, s.deps) do
+          nil ->
+            Enum.each(warnings, &print_finding/1)
+            ts = now()
+
+            s = %{
+              finalize_operator(s, ctx, exchange: 1)
+              | display_id: old.display_id,
+                revises: old.sid,
+                inserted_at: ts
+            }
+
+            Journal.append(ctx.dir, %{event: "statement_added", statement: s, ts: ts})
+
+            Journal.append(ctx.dir, %{
+              event: "state_changed",
+              sid: old.sid,
+              state: "superseded",
+              note: nil,
+              ts: now()
+            })
+
+            refresh(ctx)
+            IO.write("#{s.display_id} #{s.sid} revises #{old.sid}\n")
+            0
+
+          path ->
+            print_finding(%{
+              code: "E_CYCLE",
+              subject: old.display_id,
+              detail: "dependency cycle: #{Enum.join(path, " -> ")}"
+            })
+
+            1
+        end
+    end
+  end
+
+  # A replacement can close a loop through its display id's dependents:
+  # check the live graph with the chain's edges swapped for the candidate's.
+  defp revised_cycle(fold, display_id, candidate_dep_sids) do
+    live =
+      fold.chains
+      |> Enum.map(fn {_id, sids} -> fold.statements[List.last(sids)] end)
+      |> Enum.filter(&(&1.state in ["proposed", "ratified"]))
+
+    display = display_fun(fold)
+
+    deps_of = fn s ->
+      if s.display_id == display_id do
+        Enum.map(candidate_dep_sids, display)
+      else
+        Enum.map(s.deps, display)
+      end
+    end
+
+    Graph.cycle(live, deps_of, & &1.display_id)
+  end
+
+  # Shared by add and amend: flags → linted statement, deps resolved
   # to sids against the fold (deps are sid-edges, D7). Usage-shaped problems
   # abort 2; content problems return {:error, findings} (exit 1, nothing
   # journaled).

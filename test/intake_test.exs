@@ -189,6 +189,72 @@ defmodule Socrates.IntakeTest do
 
     File.write!(".socrates/sources/2/source.txt", original)
     {0, _, _} = run(~w(verify))
+
+    ## Scenario 7 — amend is supersession, never mutation
+
+    fold = Socrates.Journal.fold(".socrates")
+    old_sid = Socrates.Journal.head(fold, "attest_1").sid
+
+    {code, stdout, stderr} = run(~w(amend attest_1 --body) ++ ["apples are a fruit"])
+    assert code == 0
+    assert stderr == "[deterministic]\n"
+    assert [_, new_sid, "revises", ^old_sid] = String.split(String.trim(stdout), " ")
+    assert stdout == "attest_1 #{new_sid} revises #{old_sid}\n"
+
+    {0, log_out, stderr} = run(~w(log --limit 3))
+    assert stderr == "[deterministic]\n"
+    ts = ~r/\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z/
+
+    assert [l1, l2, l3] = String.split(String.trim(log_out), "\n")
+    assert l1 =~ ~r/^#{ts.source} intake_rejected @3$/
+
+    assert l2 ==
+             (Regex.run(ts, l2) |> hd()) <>
+               " statement_added attest_1 #{new_sid} revises #{old_sid}"
+
+    assert l3 == (Regex.run(ts, l3) |> hd()) <> " state_changed #{old_sid} superseded"
+
+    # render shows only the current statement; the journal holds both, forever
+    {0, render_out, _} = run(~w(render))
+    assert render_out =~ "⊢ [attest_1] apples are a fruit\n"
+    refute render_out =~ "apples are fruits"
+
+    fold = Socrates.Journal.fold(".socrates")
+    assert fold.statements[old_sid].state == "superseded"
+    assert fold.statements[old_sid].body == "apples are fruits"
+    assert fold.chains["attest_1"] == [old_sid, new_sid]
+
+    # the chain shares one display id: infer_1's dep still renders attest_1,
+    # and rdeps through the chain still finds infer_1
+    {0, out, _} = run(~w(show infer_1))
+    assert out =~ "deps: attest_1, attest_2"
+    {0, out, _} = run(~w(rdeps attest_1))
+    assert out == "infer_1\n"
+  end
+
+  test "reject with a note journals the verdict; rejected ids stay consumed" do
+    seed_store()
+    {0, _, _} = run(~w(intake canon-block.txt))
+
+    {code, stdout, stderr} = run(~w(reject attest_4 attest_5 --note) ++ ["decomposition too coarse"])
+    assert code == 0
+    assert stdout == ""
+    assert stderr == "2 rejected\n[deterministic]\n"
+
+    fold = Socrates.Journal.fold(".socrates")
+    assert Socrates.Journal.head(fold, "attest_4").state == "rejected"
+
+    notes =
+      for %{event: "state_changed", state: "rejected", note: note} <- fold.events, do: note
+
+    assert notes == ["decomposition too coarse", "decomposition too coarse"]
+
+    # a rejected statement cannot be depped, and its display index is never reused
+    {1, _, stderr} = run(~w(add --type attest --dep attest_4 --body x))
+    assert stderr =~ "E_DANGLING_DEP attest: dep attest_4 rejected"
+
+    {0, out, _} = run(~w(add --type attest --body) ++ ["fresh statement"])
+    assert String.starts_with?(out, "attest_8 ")
   end
 
   test "stop_reason other than end_turn fails loudly: archived, journaled, exit 1" do

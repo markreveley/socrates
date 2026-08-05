@@ -357,6 +357,68 @@ defmodule Socrates.CLIScenariosTest do
     end
   end
 
+  describe "M4 — amend edges" do
+    test "amend keeps the type; --type is not an amend flag" do
+      {0, _, _} = run(~w(init))
+      {0, _, _} = run(~w(add --type attest --body x))
+      {2, _, stderr} = run(~w(amend attest_1 --type infer --body y))
+      assert stderr =~ "unknown option: --type"
+    end
+
+    test "amend refuses a cycle through its own display id" do
+      {0, _, _} = run(~w(init))
+      {0, _, _} = run(~w(add --type attest --body x))
+      {0, _, _} = run(~w(add --type infer --dep attest_1 --body y))
+
+      {code, _, stderr} = run(~w(amend attest_1 --dep infer_1 --body) ++ ["now circular"])
+      assert code == 1
+
+      assert stderr ==
+               "E_CYCLE attest_1: dependency cycle: attest_1 -> infer_1 -> attest_1\n[deterministic]\n"
+
+      {code, _, stderr} = run(~w(amend attest_1 --dep attest_1 --body) ++ ["self-loop"])
+      assert code == 1
+      assert stderr =~ "E_CYCLE attest_1: dependency cycle: attest_1 -> attest_1"
+    end
+
+    test "amend of a superseded sid points at the live head; rejected refuses" do
+      {0, _, _} = run(~w(init))
+      {0, out, _} = run(~w(add --type attest --body x))
+      [_, old_sid] = String.split(String.trim(out), " ")
+      {0, out, _} = run(~w(amend attest_1 --body y))
+      [_, new_sid, _, _] = String.split(String.trim(out), " ")
+
+      {code, _, stderr} = run(["amend", old_sid, "--body", "z"])
+      assert code == 2
+      assert stderr =~ "cannot amend superseded attest_1 (live head: #{new_sid})"
+    end
+
+    test "amending a def demands the full replacement (term and scope again)" do
+      {0, _, _} = run(~w(init))
+      {0, _, _} = run(~w(add --type def --term t --scope global --body) ++ ["a def"])
+
+      {2, _, stderr} = run(~w(amend def_1 --body) ++ ["just a new body"])
+      assert stderr =~ "def requires --term"
+
+      {0, out, _} = run(~w(amend def_1 --term t2 --scope local --body) ++ ["a new def"])
+      assert String.starts_with?(out, "def_1 ")
+
+      # the export follows the fold: t is gone, t2 is local — nothing global
+      assert JSON.decode!(File.read!(".socrates/definitions.json")) == %{}
+    end
+
+    test "amend stamps exchange 1 and enters ratified even when amending a proposal" do
+      {0, _, _} = run(~w(init))
+      {0, _, _} = run(~w(add --type attest --body x))
+      {0, _, _} = run(~w(amend attest_1 --body y))
+      fold = Socrates.Journal.fold(".socrates")
+      head = Socrates.Journal.head(fold, "attest_1")
+      assert head.exchange == 1
+      assert head.state == "ratified"
+      assert head.author == "operator"
+    end
+  end
+
   describe "usage and environment errors" do
     test "unknown command, unknown type, def/ref flag requirements" do
       {2, _, stderr} = run(~w(frobnicate))
