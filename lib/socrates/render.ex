@@ -13,9 +13,11 @@ defmodule Socrates.Render do
   newlines) indent two spaces.
 
   Document order is topological, defs and refs first — computed by the
-  renderer, never requested of the model. (M1: defs/refs first in journal
-  order — true topological order arrives with `Socrates.Graph` at M2.)
+  renderer via `Socrates.Graph` (Kahn; ready-set ties broken defs/refs
+  first, then journal order), never requested of the model.
   """
+
+  alias Socrates.Graph
 
   @doc """
   The rendered document for a list of statements (already selected, journal
@@ -23,7 +25,7 @@ defmodule Socrates.Render do
   """
   def document(statements, display, opts \\ []) do
     statements
-    |> Enum.sort_by(fn s -> if s.type in ["def", "ref"], do: 0, else: 1 end)
+    |> Graph.topo_sort(fn s -> Enum.map(s.deps, display) end, & &1.display_id)
     |> Enum.map(&line(&1, display, opts))
     |> Enum.map(&[&1, "\n"])
     |> IO.iodata_to_binary()

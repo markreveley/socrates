@@ -210,6 +210,153 @@ defmodule Socrates.CLIScenariosTest do
     end
   end
 
+  describe "scenario 3 — reading the graph (M2)" do
+    defp author_syllogism do
+      {0, _, _} = run(~w(init))
+      {0, _, _} = run(~w(add --type attest --body) ++ ["apples are fruits"])
+      {0, _, _} = run(~w(add --type attest --body) ++ ["fruits reproduce"])
+
+      {0, _, _} =
+        run(~w(add --type infer --dep attest_1 --dep attest_2 --body) ++ ["apples reproduce"])
+
+      {0, _, _} = run(~w(add --type attest --body) ++ ["i want access to more food consistently"])
+
+      {0, _, _} =
+        run(
+          ~w(add --type act --dep infer_1 --dep attest_3 --body) ++
+            ["i should consider planting apple trees"]
+        )
+    end
+
+    test "render: topological order, exact bytes, ⊢ on every operator statement" do
+      author_syllogism()
+      {code, stdout, stderr} = run(~w(render))
+      assert code == 0
+
+      assert stdout == """
+             ⊢ [attest_1] apples are fruits
+             ⊢ [attest_2] fruits reproduce
+             ⊢ [attest_3] i want access to more food consistently
+             ⊢ [infer_1](attest_1, attest_2) apples reproduce
+             ⊢ [act_1](infer_1, attest_3) i should consider planting apple trees
+             """
+
+      assert stderr == "[deterministic]\n"
+    end
+
+    test "rdeps direct and --all, exact bytes" do
+      author_syllogism()
+
+      {0, stdout, stderr} = run(~w(rdeps attest_1))
+      assert stdout == "infer_1\n"
+      assert stderr == "[deterministic]\n"
+
+      {0, stdout, _} = run(~w(rdeps attest_1 --all))
+      assert stdout == "infer_1\nact_1\n"
+    end
+
+    test "deps direct and --all" do
+      author_syllogism()
+
+      {0, stdout, _} = run(~w(deps act_1))
+      assert stdout == "infer_1\nattest_3\n"
+
+      {0, stdout, _} = run(~w(deps act_1 --all))
+      assert stdout == "infer_1\nattest_3\nattest_1\nattest_2\n"
+    end
+
+    test "selectors: <id>, <id>+deps, <id>+rdeps, @<exchange>" do
+      author_syllogism()
+
+      {0, stdout, _} = run(~w(render infer_1))
+      assert stdout == "⊢ [infer_1](attest_1, attest_2) apples reproduce\n"
+
+      {0, stdout, _} = run(~w(render infer_1+deps))
+
+      assert stdout == """
+             ⊢ [attest_1] apples are fruits
+             ⊢ [attest_2] fruits reproduce
+             ⊢ [infer_1](attest_1, attest_2) apples reproduce
+             """
+
+      {0, stdout, _} = run(~w(render attest_1+rdeps))
+
+      assert stdout == """
+             ⊢ [attest_1] apples are fruits
+             ⊢ [infer_1](attest_1, attest_2) apples reproduce
+             ⊢ [act_1](infer_1, attest_3) i should consider planting apple trees
+             """
+
+      {0, stdout, _} = run(~w(render @1))
+      assert stdout =~ "act_1"
+
+      {2, _, stderr} = run(~w(render attest_1+sideways))
+      assert stderr =~ "unknown selector"
+    end
+
+    test "graph prints an indented dependency tree from the roots" do
+      author_syllogism()
+      {0, stdout, _} = run(~w(graph))
+
+      assert stdout == """
+             ⊢ [act_1](infer_1, attest_3) i should consider planting apple trees
+               ⊢ [infer_1](attest_1, attest_2) apples reproduce
+                 ⊢ [attest_1] apples are fruits
+                 ⊢ [attest_2] fruits reproduce
+               ⊢ [attest_3] i want access to more food consistently
+             """
+    end
+  end
+
+  describe "M2 — ratify/reject and verify surfaces" do
+    test "transitioning a non-proposed statement: error, exit 2, nothing journaled" do
+      {0, _, _} = run(~w(init))
+      {0, _, _} = run(~w(add --type attest --body x))
+      journal = File.read!(".socrates/journal.jsonl")
+
+      {code, _, stderr} = run(~w(ratify attest_1))
+      assert code == 2
+      assert stderr =~ "attest_1 is ratified, not proposed"
+      assert File.read!(".socrates/journal.jsonl") == journal
+
+      {2, _, stderr} = run(~w(ratify attest_9))
+      assert stderr =~ "unknown id: attest_9"
+    end
+
+    test "operator add now refuses an undefined term (M2 full lint)" do
+      {0, _, _} = run(~w(init))
+
+      {1, _, stderr} = run(~w(add --type attest --body) ++ ["*coinage* with no def"])
+
+      assert stderr ==
+               "E_TERM_UNDEF attest: term *coinage* has no def in scope\n[deterministic]\n"
+
+      {0, _, _} =
+        run(~w(add --type def --term coinage --scope local --body) ++ ["a term minted mid-walk"])
+
+      {0, _, _} = run(~w(add --type attest --body) ++ ["*coinage* with a def"])
+    end
+
+    test "verify: clean empty store, then a tampered ref origin trips exit 3" do
+      {0, _, _} = run(~w(init))
+
+      {code, _, stderr} = run(~w(verify))
+      assert code == 0
+      assert stderr == "sources: 0 files ok · ref origins: 0 checked\n[deterministic]\n"
+
+      File.write!("anchor.txt", "original\n")
+      {0, _, _} = run(~w(add --type ref --origin file:anchor.txt --body) ++ ["an anchor"])
+
+      {0, _, stderr} = run(~w(verify))
+      assert stderr == "sources: 0 files ok · ref origins: 1 checked\n[deterministic]\n"
+
+      File.write!("anchor.txt", "tampered\n")
+      {code, _, stderr} = run(~w(verify))
+      assert code == 3
+      assert stderr == "MISMATCH anchor.txt\n[deterministic]\n"
+    end
+  end
+
   describe "usage and environment errors" do
     test "unknown command, unknown type, def/ref flag requirements" do
       {2, _, stderr} = run(~w(frobnicate))
