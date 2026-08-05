@@ -1,7 +1,7 @@
 ---
 title: "socrates — charter"
 date: 2026-08-05
-status: pre-build — plan 0001 ratified, build next
+status: plan 0001 built — MVP harness usable, acceptance walked
 ---
 
 # socrates
@@ -40,6 +40,50 @@ ratified — comprehension events — not tokens generated.
 Writes are asymmetric by design: operator statements enter directly (`add` —
 lint only; authorship is assent), while model output enters only through the
 gate, as `proposed`, and waits. The human is direct; the model petitions.
+
+## Usage
+
+Build (Elixir ≥ 1.18 / OTP ≥ 27; the host running the escript needs only
+Erlang):
+
+```
+mix deps.get && MIX_ENV=prod mix escript.build   # → ./socrates
+```
+
+Every command operates on `./.socrates` in the current directory and prints
+a boundary footer on stderr — `[deterministic]`, or `[inference: <model> ·
+<request-id> · <n> in / <m> out]` for the one generative door. stdout
+carries only the artifact (D6): renders pipe clean. Exit codes: `0` ok ·
+`1` gate-rejected · `2` usage/environment · `3` verify mismatch. The
+complete interface is [`spec/cli-v0.md`](spec/cli-v0.md); worked walks with
+exact expected output are [`spec/scenarios-v0.md`](spec/scenarios-v0.md).
+
+```
+socrates init                         # create the store; opens exchange 1
+socrates add --type attest --body "apples are fruits"
+socrates add --type infer --dep attest_1 --dep attest_2 --body "…"
+socrates amend attest_1 --body "…"    # supersession, never mutation
+socrates show attest_1                # full record
+socrates deps act_1 --all             # dependencies (transitive)
+socrates rdeps attest_1               # dependents
+socrates graph                        # indented dependency tree
+socrates render                       # ⊢-marked bracket notation, topological
+socrates intake prose.txt             # the one inference command (gated)
+socrates ratify def_2 attest_4        # operator-only state transitions
+socrates reject attest_5 --note "…"
+socrates verify                       # re-hash archives + ref origins; no network
+socrates log --limit 10               # journal events, newest last
+```
+
+`intake` needs `ANTHROPIC_API_KEY` (model default `claude-opus-5`, override
+with `SOCRATES_MODEL`); `SOCRATES_CLIENT=fixture` selects the canned client —
+honest provenance, no key, no network — which is how every test and the
+acceptance walk runs. Operator statements enter `ratified`; model proposals
+wait as `proposed` (no `⊢`) until `ratify`/`reject`. Ratifying a `:global`
+def promotes it into `definitions.json`, a derived export of the journal
+fold. Build decisions the specs left open are logged in
+[`plans/0001-build-notes.md`](plans/0001-build-notes.md), proposed for
+ratification.
 
 ## Map
 
