@@ -1,15 +1,16 @@
 ---
 title: "Plan 0001 — MVP harness"
-status: proposed
+status: ratified 2026-08-05 — the first build
 date: 2026-08-05
 decides: language=elixir, scope=minimum-viable dogfooding loop
 ---
 
 # Plan 0001 — MVP harness
 
-**Status: `proposed`.** In keeping with the system this plan describes, it does not
-build itself: the operator ratifies (or amends) it, then implementation begins.
-Open decisions are collected at the bottom as D1–D4.
+**Status: `ratified` (2026-08-05). This document is the exact first build:**
+run the milestones in order, satisfy the acceptance section, and stop. Sibling
+plans 0002–0006 are designed but explicitly **not** part of this build.
+Decisions D1–D6 below are ratified.
 
 This document is self-contained — implementable without access to the thread that
 produced it. Context in one paragraph: socrates is a type system for statements.
@@ -180,6 +181,20 @@ Inference: `intake`. (That is the complete list. One generative door.)
 - Exit codes: `0` ok · `1` gate-rejected after retries · `2` usage error ·
   `3` verify mismatch.
 
+## Module map
+
+| Module | Responsibility |
+|---|---|
+| `Socrates.Statement` | struct + structural lint for one statement |
+| `Socrates.Sid` | ULID generation (~40 lines, stdlib only) |
+| `Socrates.Journal` | append/fold; deterministic field-order encoder; fsync |
+| `Socrates.Graph` | fold output → map + adjacency; resolve, cycles (DFS), topological order (Kahn), deps/rdeps closures |
+| `Socrates.Gate` | the check pipeline; structured errors and warnings |
+| `Socrates.Loadout` | type list, JSON schema for the API, system-prompt assembly |
+| `Socrates.Client` | behaviour; `Client.Anthropic` (Req), `Client.Fixture` (tests) |
+| `Socrates.Render` | topological order, bracket notation, `⊢`; artifact to stdout |
+| `Socrates.CLI` | escript `main/1`, dispatch, exit codes, stderr footers |
+
 ## Milestones
 
 Each milestone is independently usable; later ones never break earlier surfaces.
@@ -199,6 +214,9 @@ Each milestone is independently usable; later ones never break earlier surfaces.
   run below, README updated with usage.
 
 ## Acceptance — the canonical example is the test
+
+Under the ratified type set (D5), intake of canon #1 emits `attest_n` display
+ids; `claim_2` and `def_0` below name the canon lines themselves.
 
 1. `socrates add` the companion `def_0` (from canon) → journaled, renders.
 2. `socrates intake` the canonical block → the gate must find **exactly**
@@ -236,7 +254,11 @@ multi-loadout switching · elixir-mind coupling. All designed, none built here.
 
 ## Spinouts
 
-- **Statement content digests** — tamper-evidence for the whole journal,
-  extending zero-network `verify` from sources and ref origins to every
-  statement. Deferred to `plans/0002-statement-digests.md`; implement after
-  the MVP milestones.
+Designed in the master thread, filed as sibling plans, **none part of this
+build**:
+
+- `0002` — statement content digests (tamper-evidence; chained verify)
+- `0003` — re-prose, patches, audit, roundtrip (the build after this one)
+- `0004` — acts, policy, the verifier, runtime evolution
+- `0005` — neovim, then a language server
+- `0006` — evals and the canary

@@ -50,3 +50,11 @@ which is what makes it the acceptance fixture rather than a display piece:
 
 The MVP is accepted when it finds exactly these, and when the repaired
 decomposition passes and ratifies. See `plans/0001-mvp-harness.md` → Acceptance.
+
+## Reading under the ratified type set (D5, 2026-08-05)
+
+The type set ratified after this artifact was filed renames `claim` →
+`attest`. The artifact predates the rename and is preserved verbatim, as the
+fidelity rule requires: its `[claim_n]` statements intake as `attest`
+statements, and the findings above are unchanged. This file remains the seed
+example and the acceptance fixture.
