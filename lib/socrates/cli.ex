@@ -10,7 +10,7 @@ defmodule Socrates.CLI do
   only — no ancestor walking.
   """
 
-  alias Socrates.{Gate, Graph, Journal, Loadout, Render, Sid, Statement}
+  alias Socrates.{Client, Gate, Graph, Journal, Loadout, Render, Sid, Statement}
 
   @code_order ~w(E_ID_FORM E_DUP_ID E_DANGLING_DEP E_CYCLE E_TERM_UNDEF E_DEF_NO_SCOPE E_REF_NO_ORIGIN W_DEF_ATOMICITY)
 
@@ -48,6 +48,7 @@ defmodule Socrates.CLI do
       ["reject" | rest] -> with_store(rest, &cmd_transition(&1, &2, "rejected"))
       ["verify" | rest] -> with_store(rest, &cmd_verify/2)
       ["log" | rest] -> with_store(rest, &cmd_log/2)
+      ["intake" | rest] -> with_store(rest, &cmd_intake/2)
       [] -> abort(usage_text(), 2)
       [cmd | _] -> abort("unknown command: #{cmd}", 2)
     end
@@ -66,7 +67,8 @@ defmodule Socrates.CLI do
       ratify <id>...            ratify proposed statements
       reject <id>... [--note <text>]  reject proposed statements
       verify                    re-hash archived sources and ref origins
-      log [--limit <n>]         journal events, newest last\
+      log [--limit <n>]         journal events, newest last
+      intake <file|->           decompose prose through the gate (inference)\
     """
   end
 
@@ -610,6 +612,356 @@ defmodule Socrates.CLI do
   defp event_line(%{event: "intake_rejected", exchange: n, ts: ts}),
     do: "#{ts} intake_rejected @#{n}"
 
+  ## intake — the one generative door
+
+  defp cmd_intake(rest, ctx) do
+    arg =
+      case args_only(rest, 1) do
+        {_, [arg]} -> arg
+        {_, []} -> abort("usage: socrates intake <file|->", 2)
+      end
+
+    {client, config} = client_from_env()
+
+    source =
+      case arg do
+        "-" ->
+          case IO.read(:stdio, :eof) do
+            :eof -> ""
+            {:error, _} -> ""
+            data -> data
+          end
+
+        path ->
+          case File.read(path) do
+            {:ok, bytes} -> bytes
+            {:error, _} -> abort("cannot read #{path}", 2)
+          end
+      end
+
+    if String.trim(source) == "", do: abort("intake source is empty", 2)
+
+    exchange = Enum.max(ctx.fold.exchanges) + 1
+    src_dir = Path.join([ctx.dir, "sources", to_string(exchange)])
+
+    if File.exists?(src_dir) and File.ls!(src_dir) != [] do
+      abort("#{src_dir} already holds files (crash debris?) — clean up before intake", 2)
+    end
+
+    File.mkdir_p!(src_dir)
+    File.write!(Path.join(src_dir, "source.txt"), source)
+    source_sha = sha256(source)
+
+    Journal.append(ctx.dir, %{
+      event: "exchange_opened",
+      exchange: exchange,
+      source: %{path: "sources/#{exchange}/source.txt", sha256: source_sha},
+      ts: now()
+    })
+
+    note("exchange #{exchange} opened · source archived #{String.slice(source_sha, 0, 12)}")
+
+    definitions =
+      ctx.fold
+      |> Journal.global_defs()
+      |> Enum.map(&%{display_id: &1.display_id, term: &1.term, body: &1.body})
+
+    messages = [%{"role" => "user", "content" => source}]
+    intake_loop(ctx, exchange, src_dir, client, config, definitions, messages, [], 0)
+  end
+
+  # At most 2 repair turns after the first call, then fail loudly (exit 1,
+  # rejected artifact archived, intake_rejected journaled). Never silently
+  # accepted.
+  defp intake_loop(ctx, exchange, src_dir, client, config, definitions, messages, calls, round) do
+    request_map = Client.build_request(messages, definitions)
+    request_bytes = Client.encode_request(request_map)
+
+    response =
+      case client.call(request_bytes, config) do
+        {:ok, %{status: 200} = response} -> response
+        {:ok, %{status: status}} -> abort("api error: status #{status}", 2)
+        {:error, reason} -> abort("inference transport failed: #{inspect(reason)}", 2)
+      end
+
+    n = round + 1
+    File.write!(Path.join(src_dir, "response-#{n}.json"), response.body)
+
+    parsed =
+      case JSON.decode(response.body) do
+        {:ok, parsed} -> parsed
+        {:error, _} -> abort("unparseable response body archived as response-#{n}.json", 2)
+      end
+
+    usage = parsed["usage"] || %{}
+
+    call = %{
+      n: n,
+      model: parsed["model"],
+      request_id: response.request_id,
+      request_sha256: sha256(request_bytes),
+      response_sha256: sha256(response.body),
+      usage: %{
+        input_tokens: usage["input_tokens"] || 0,
+        output_tokens: usage["output_tokens"] || 0
+      },
+      ts: now()
+    }
+
+    calls = calls ++ [call]
+    set_inference_footer(calls)
+
+    if parsed["stop_reason"] != "end_turn" do
+      reject_intake(
+        ctx,
+        exchange,
+        calls,
+        nil,
+        [
+          %{
+            code: "stop_reason",
+            subject: "response-#{n}",
+            detail: to_string(parsed["stop_reason"])
+          }
+        ],
+        "stop_reason #{parsed["stop_reason"]} — response archived, not gated"
+      )
+    else
+      artifact_text =
+        parsed["content"]
+        |> List.wrap()
+        |> Enum.filter(&(&1["type"] == "text"))
+        |> List.last()
+        |> case do
+          %{"text" => text} -> text
+          _ -> abort("no text content in response-#{n}.json", 2)
+        end
+
+      case artifact_statements(artifact_text) do
+        {:error, detail} ->
+          reject_intake(
+            ctx,
+            exchange,
+            calls,
+            {artifact_text, round},
+            [%{code: "artifact_shape", subject: "response-#{n}", detail: detail}],
+            "artifact does not match the schema: #{detail}"
+          )
+
+        {:ok, statements} ->
+          case Gate.check_artifact(statements, ctx.fold) do
+            {:ok, statements, warnings} ->
+              Enum.each(warnings, &print_finding(&1, "gate: "))
+              note("gate: pass (#{length(statements)} statements, #{length(warnings)} warnings)")
+              accept_artifact(ctx, exchange, statements, calls)
+
+            {:error, errors, warnings} ->
+              Enum.each(errors ++ warnings, &print_finding(&1, "gate: "))
+
+              if round < 2 do
+                note("repair #{round + 1}/2 …")
+
+                repair = Journal.emit(%{"gate_errors" => Enum.map(errors, &Map.new/1)})
+
+                messages =
+                  messages ++
+                    [
+                      %{"role" => "assistant", "content" => artifact_text},
+                      %{"role" => "user", "content" => repair}
+                    ]
+
+                intake_loop(
+                  ctx,
+                  exchange,
+                  src_dir,
+                  client,
+                  config,
+                  definitions,
+                  messages,
+                  calls,
+                  round + 1
+                )
+              else
+                reject_intake(
+                  ctx,
+                  exchange,
+                  calls,
+                  {artifact_text, round},
+                  errors,
+                  "rejected after 2 repairs · artifact: #{src_dir}/rejected-#{round}.json"
+                )
+              end
+          end
+      end
+    end
+  end
+
+  defp reject_intake(ctx, exchange, calls, rejected_artifact, errors, message) do
+    rejected =
+      case rejected_artifact do
+        nil ->
+          nil
+
+        {artifact_text, round} ->
+          path = "sources/#{exchange}/rejected-#{round}.json"
+          File.write!(Path.join(ctx.dir, path), artifact_text)
+          %{path: path, sha256: sha256(artifact_text)}
+      end
+
+    Journal.append(ctx.dir, %{
+      event: "intake_rejected",
+      exchange: exchange,
+      errors: errors,
+      calls: calls,
+      rejected: rejected,
+      ts: now()
+    })
+
+    note(message)
+    1
+  end
+
+  # D7 acceptance: the app assigns final store-global display ids (next free
+  # index per type, in artifact order), keeps the model's artifact-local id
+  # on the statement (the journaled mapping), resolves deps to sid-edges,
+  # and journals everything as proposed.
+  defp accept_artifact(ctx, exchange, statements, calls) do
+    {assigned, _counters} =
+      Enum.map_reduce(statements, %{}, fn s, counters ->
+        index = Map.get_lazy(counters, s.type, fn -> Journal.next_index(ctx.fold, s.type) end)
+
+        s = %{
+          s
+          | sid: Sid.generate(),
+            display_id: "#{s.type}_#{index}",
+            exchange: exchange,
+            state: "proposed",
+            author: "model",
+            provenance: %{calls: calls},
+            inserted_at: now()
+        }
+
+        {s, Map.put(counters, s.type, index + 1)}
+      end)
+
+    by_artifact_id = Map.new(assigned, &{&1.artifact_id, &1.sid})
+
+    assigned =
+      assigned
+      |> Enum.with_index(1)
+      |> Enum.map(fn {s, seq} ->
+        deps =
+          Enum.map(s.deps, fn dep ->
+            by_artifact_id[dep] || Journal.head(ctx.fold, dep).sid
+          end)
+
+        %{s | deps: deps, seq: seq}
+      end)
+
+    Enum.each(assigned, fn s ->
+      Journal.append(ctx.dir, %{event: "statement_added", statement: s, ts: s.inserted_at})
+    end)
+
+    ctx = refresh(ctx)
+
+    IO.write(
+      Render.document(assigned_heads(ctx.fold, assigned), display_fun(ctx.fold), render_opts())
+    )
+
+    0
+  end
+
+  defp assigned_heads(fold, assigned), do: Enum.map(assigned, &fold.statements[&1.sid])
+
+  # The model artifact, strictly decoded: exactly the model-suppliable
+  # fields, string-typed where the schema says so. Semantic checks are the
+  # gate's; this pass only refuses shapes the schema could never produce.
+  defp artifact_statements(text) do
+    case JSON.decode(text) do
+      {:ok, %{"statements" => list}} when is_list(list) ->
+        decode_artifact_statements(list)
+
+      {:ok, _} ->
+        {:error, "top level is not {\"statements\": [...]}"}
+
+      {:error, _} ->
+        {:error, "artifact is not valid JSON"}
+    end
+  end
+
+  defp decode_artifact_statements(list) do
+    statements =
+      Enum.map(list, fn item ->
+        with %{} <- item,
+             [] <- Map.keys(item) -- ~w(display_id type body deps notes term scope origin),
+             true <- is_binary(item["display_id"]) and is_binary(item["type"]),
+             true <- is_binary(item["body"]),
+             true <- is_list(item["deps"] || []) and Enum.all?(item["deps"] || [], &is_binary/1),
+             true <- is_list(item["notes"] || []) and Enum.all?(item["notes"] || [], &is_binary/1),
+             {:ok, origin} <- artifact_origin(item["origin"]) do
+          %Statement{
+            artifact_id: item["display_id"],
+            type: item["type"],
+            body: item["body"],
+            term: item["term"],
+            scope: item["scope"],
+            origin: origin,
+            deps: item["deps"] || [],
+            notes: item["notes"] || []
+          }
+        else
+          _ -> :error
+        end
+      end)
+
+    if Enum.any?(statements, &(&1 == :error)) do
+      {:error, "a statement carries fields outside the model-suppliable set"}
+    else
+      {:ok, statements}
+    end
+  end
+
+  defp artifact_origin(nil), do: {:ok, nil}
+
+  defp artifact_origin(%{"kind" => kind, "locator" => locator} = o)
+       when is_binary(kind) and is_binary(locator) do
+    case Map.keys(o) -- ~w(kind locator) do
+      [] -> {:ok, %{kind: kind, locator: locator, sha256: nil}}
+      _ -> :error
+    end
+  end
+
+  defp artifact_origin(_), do: :error
+
+  defp client_from_env do
+    case System.get_env("SOCRATES_CLIENT", "anthropic") do
+      "anthropic" ->
+        if System.get_env("ANTHROPIC_API_KEY") in [nil, ""] do
+          abort("ANTHROPIC_API_KEY not set (required by intake)", 2)
+        end
+
+        {Socrates.Client.Anthropic, %{}}
+
+      "fixture" ->
+        {Socrates.Client.Fixture, %{path: nil}}
+
+      "fixture:" <> path ->
+        {Socrates.Client.Fixture, %{path: path}}
+
+      other ->
+        abort("unknown SOCRATES_CLIENT: #{other}", 2)
+    end
+  end
+
+  # The footer reflects what actually ran: the serving model and request id
+  # from the last response, token usage summed across the intake's calls.
+  defp set_inference_footer(calls) do
+    last = List.last(calls)
+    tin = calls |> Enum.map(& &1.usage.input_tokens) |> Enum.sum()
+    tout = calls |> Enum.map(& &1.usage.output_tokens) |> Enum.sum()
+    Process.put(:socrates_footer, {:inference, last.model, last.request_id || "-", tin, tout})
+  end
+
   ## Shared helpers
 
   defp resolve(fold, arg) do
@@ -626,8 +978,10 @@ defmodule Socrates.CLI do
     [ansi: IO.ANSI.enabled?()]
   end
 
-  defp print_finding(%{code: code, subject: subject, detail: detail}) do
-    IO.write(:stderr, "#{code} #{subject}: #{detail}\n")
+  defp print_finding(finding, prefix \\ "")
+
+  defp print_finding(%{code: code, subject: subject, detail: detail}, prefix) do
+    IO.write(:stderr, "#{prefix}#{code} #{subject}: #{detail}\n")
   end
 
   defp note(msg), do: IO.write(:stderr, msg <> "\n")

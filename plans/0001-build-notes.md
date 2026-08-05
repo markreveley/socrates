@@ -104,4 +104,63 @@ logged it here. Nothing in this file edits a ratified document; every item is
 - **N18. `E_CYCLE` detail** prints the cycle as
   `dependency cycle: a -> b -> a` (artifact-local ids; ASCII arrows).
 
-(Later milestones append here.)
+## M3 — client and intake
+
+- **N19. Client behaviour boundary:** a client is a transport —
+  `call(request_bytes, config) → {:ok, %{status, body, request_id}}`.
+  Request assembly is shared (`Socrates.Client.build_request/2` +
+  `encode_request/1`, the deterministic encoder), so the digested bytes are
+  the sent bytes for fixture and live alike, and the fixture's provenance
+  digests are real digests of real requests.
+- **N20. Built-in fixture keying:** the default fixture serves the
+  acceptance sequence for sources carrying canon #1's
+  `*representation ratification*` marker, and the persistently-broken
+  artifact (scenario 5) for anything else. `fixture:<path>` serves a JSON
+  array of full response bodies by call index (last repeats) for arbitrary
+  test behaviors. Fixture responses are emitted through the deterministic
+  encoder, so archived bytes are stable across runs.
+- **N21. Fixture artifact bodies** (scenario 4 said "statement bodies are
+  the fixture's, deterministic once the fixture is authored"): canon #1's
+  claims verbatim, minus the inline `(def_0)` notation artifacts (the dep
+  edge replaces them — decomposition, not quotation), with claim_2's
+  asymmetric `*…"` delimiter closed to `*…*` (only the re-emission makes
+  the term findable — audit C1) and its inline brace note moved to the
+  notes field. The minted def_2: term as coined, scope local, a
+  single-clause body (0 warnings), the canon note carried over.
+- **N22. Repair-turn transcript:** the assistant turn is the model's
+  artifact text verbatim; the user turn is the `{"gate_errors": [...]}`
+  JSON (loadout pin). The repaired artifact replaces the whole proposal
+  (full re-emission).
+- **N23. stop_reason ≠ end_turn** (audit B3): response archived, then
+  `intake_rejected` journaled with a `stop_reason` finding (subject
+  `response-<n>`), stderr `stop_reason <r> — response archived, not
+  gated`, exit 1. Transport/API failure (non-200, network): exit 2, error
+  on stderr, nothing further journaled — the exchange stays open with its
+  archived source, which is honest: the source was archived, no inference
+  completed. An unparseable 200 body or a schema-impossible artifact
+  shape: archived, `intake_rejected` with an `artifact_shape` finding,
+  exit 1.
+- **N24. Inference footer content** for multi-call intakes: the model and
+  request id of the last response, token usage summed across all calls of
+  the invocation (the honest total cost). Fixture: `fixture · - · 0 in /
+  0 out` (cli-v0 pin).
+- **N25. Intake env-failure footer:** an intake that aborts before any
+  call completes (missing key, unreadable file) footers `[deterministic]`
+  — no inference ran; the footer reports what happened, not what was
+  intended. After any completed call the footer is the inference form,
+  including on rejection paths (scenario 5 pin).
+- **N26. Exchange-dir collision** (crash mid-intake leaves archived files
+  with no journal record): a later intake that would reuse the directory
+  refuses with exit 2 and a cleanup message rather than violating
+  write-once. Journal order for intake: `exchange_opened` (with source
+  digest) first, statements or `intake_rejected` at the end — a crash
+  between the two leaves an open, empty exchange, visible in `log`.
+- **N27. `HTTPS_PROXY`** is honored by the live client when the
+  environment sets it (standard convention; needed in sandboxed
+  environments). No proxy → direct connection. TLS stays on the OS trust
+  store either way (audit B1).
+- **N28. `SOCRATES_MODEL`** reaches the request body verbatim; the
+  journaled per-call `model` is taken from the response (what actually
+  served), which is also what the footer shows.
+
+(M4 appends here.)
