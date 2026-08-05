@@ -1,7 +1,7 @@
 ---
 title: "Audit — plan 0001 pre-build check"
 date: 2026-08-05
-status: proposed — findings await operator ratification; nothing below edits ratified text
+status: applied — verified by a second agent (one counter-finding; §E corrected); D7 ratified as option B and amendments applied on operator instruction, 2026-08-05
 scope: plans/0001-mvp-harness.md, spec/cli-v0.md, spec/scenarios-v0.md, canon/*, sibling plans, external technical claims
 verdict: hold the build on four defects (A1–A4); everything else is buildable as written
 ---
@@ -27,6 +27,16 @@ nondeterministic (A3) or un-runnable (A4). Each has a cheap fix; A1 needs a
 ratification decision (proposed as D7). With A1–A4 resolved, the plan is
 implementable exactly as written — the ground rules, module map, milestones,
 store design, and gate design all survived adversarial review intact.
+
+## Resolution record (2026-08-05)
+
+A second agent adversarially verified this audit against the normative text —
+fresh context, the proposer's reasoning excluded — and concurred on every
+finding and on D7 option B, filing one counter-finding against §E (corrected
+in place below). The operator then instructed application per the audit's
+recommendation: **D7 is ratified as option B**, and amendments A2–A4, B1–B5
+and the §C notes are applied in the changeset carrying this record, in the
+suggested resolution order. The build unblocks on merge.
 
 ---
 
@@ -368,9 +378,11 @@ Claims checked adversarially that need **no** amendment:
   plan already owns it with the deterministic encoder + property tests —
   the right call.
 - **Internal cross-checks that passed**: exit-code table vs every scenario;
-  store-missing behavior; scenario 4's dep structure is a faithful map of
-  canon #1 (claims 0–3 → attests, def_0 → def_1); scenario 2 correctly
-  applies the implicit-conjunction rule; canon #2's annotated findings
+  store-missing behavior; scenario 4's dep structure maps canon #1 faithfully
+  up to one model-added edge (claims 0–3 → attests, def_0 → def_1; `attest_3`
+  carries a `def_1` dep that canon's bare `claim_2` does not — counter-finding
+  by the verifying agent, absorbed by A3's fixture-canonical walk); scenario 2
+  correctly applies the implicit-conjunction rule; canon #2's annotated findings
   (`E_DUP_ID`, `E_ID_FORM`) are accurate; sibling plans 0002–0006 contain
   no contradictions with 0001 (0002's digest-field exclusions match the
   journal design; 0004/0005/0006 defer cleanly); all intra-repo links
