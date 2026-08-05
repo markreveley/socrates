@@ -57,7 +57,8 @@ journaled with provenance. Nothing else.
 ## The loadout (v0 language)
 
 Seeded from `canon/representation-ratification.md`, conservatively. The loadout
-lives in `spec/loadout-v0.md` (prose for humans) plus a module
+does not exist yet — it is the first M0 deliverable, written as
+`spec/loadout-v0.md` (prose for humans) plus a module
 (`Socrates.Loadout`) that carries the same facts as data: the type list, the
 JSON schema sent to the API, and the system prompt assembly.
 
@@ -85,7 +86,7 @@ Lives at `.socrates/` in whatever repo the operator runs in — for dogfooding,
   journal.jsonl        # events: exchange_opened | statement_added |
                        #         state_changed | intake_rejected
   sources/<exchange>/  # verbatim prose + raw model responses, write-once
-  glossary.json        # :global defs, promoted on ratification
+  definitions.json     # :global defs, promoted on ratification
 ```
 
 - **Deterministic serializer:** `Socrates.Journal.encode/1` owns field order
@@ -106,7 +107,7 @@ statement. Hard errors and advisory warnings are distinct.
 | `E_DUP_ID` | display_ids unique within the exchange |
 | `E_DANGLING_DEP` | every dep resolves to an existing statement |
 | `E_CYCLE` | dependency graph is acyclic (DFS; the cycle path is printed) |
-| `E_TERM_UNDEF` | every `*term*` used in a body has a def in scope or glossary |
+| `E_TERM_UNDEF` | every `*term*` used in a body has a def in scope or in the definitions file |
 | `E_DEF_NO_SCOPE` | defs declare `local` or `global` |
 | `E_REF_NO_ORIGIN` | refs carry an origin; app resolves and hashes local files |
 | `W_DEF_ATOMICITY` | *warning:* def body is multi-sentence or clause-conjoined |
@@ -132,7 +133,7 @@ Request shape (hand-assembled):
   (`ANTHROPIC_API_KEY`), `anthropic-version: 2023-06-01`.
 - `model: "claude-opus-5"`, `max_tokens: 16000`, `thinking` omitted (on by
   default for this model). Generous receive timeout (≥ 5 min).
-- `system`: array of blocks — loadout spec + current glossary — with
+- `system`: array of blocks — loadout spec + current definitions — with
   `cache_control: {"type": "ephemeral"}` on the last block (repeat invocations
   pay ~10% for the stable prefix).
 - `output_config: {format: {type: "json_schema", schema: <from Loadout>}}` with
@@ -151,13 +152,15 @@ Deterministic: `add`, `amend`, `show`, `deps`, `rdeps`, `graph`, `render`,
 Inference: `intake`. (That is the complete list. One generative door.)
 
 - `add` — operator authors a statement directly (flags or stdin). Lint only,
-  journaled with `author: operator`. **Lands before `intake` exists** — see M1.
+  journaled with `author: operator`. Operator statements enter `ratified`
+  directly — authorship is assent; only model proposals wait in `proposed`.
+  **Lands before `intake` exists** — see M1.
 - `amend <id>` — operator authors a replacement; new statement + `revises` edge;
   old statement → `superseded`. The human edit path, journaled, attributed.
 - `intake <file|->` — archive source verbatim (digest recorded) → one client
   call → gate + repair loop → journal as `proposed` → render.
 - `ratify | reject <ids…>` — state transitions. Ratifying a `:global` def
-  promotes it into `glossary.json`.
+  promotes it into `definitions.json`.
 - `render [selector]` — topological order, defs/refs first, bracket notation;
   ratified statements carry the `⊢` prefix (D4); notes dimmed; footer lists
   what the gate checked.
@@ -182,7 +185,7 @@ Each milestone is independently usable; later ones never break earlier surfaces.
   linted; circular reasoning now a mechanical error.
 - **M3 — the gate in anger.** `Client` (behaviour + both impls), `intake`,
   repair loop, source archiving, provenance. The one generative door opens.
-- **M4 — finish.** `amend`, glossary promotion, escript packaging, acceptance
+- **M4 — finish.** `amend`, definitions promotion, escript packaging, acceptance
   run below, README updated with usage.
 
 ## Acceptance — the canonical example is the test
@@ -193,7 +196,7 @@ Each milestone is independently usable; later ones never break earlier surfaces.
    step 1 is skipped). The repair loop either mints the missing def or fails
    visibly with the artifact saved.
 3. `ratify` all → `render` shows `⊢` on every statement; any `:global` defs
-   appear in `glossary.json`.
+   appear in `definitions.json`.
 4. `verify` passes; folding the journal twice produces identical state.
 5. Forced-failure fixture → exit `1`, `rejected-*.json` on disk,
    `intake_rejected` in the journal.
@@ -204,13 +207,21 @@ re-prose · patches/compile · audit/changesets · roundtrip · verifier model �
 acts/policy table · nvim · LSP · GenServer store ownership · streaming ·
 multi-loadout switching · elixir-mind coupling. All designed, none built here.
 
-## Decisions for ratification
+## Decisions
 
-- **D1 — `req` as the sole dependency.** Alternative: zero-dep `:httpc` +
-  `:ssl` (cost: TLS/cert and retry boilerplate). Recommendation: `req`.
-- **D2 — escript distribution.** Alternative: mix tasks (`mix socrates.add`).
-  Recommendation: escript.
-- **D3 — pin Elixir ≥ 1.18 / OTP ≥ 27** for stdlib JSON. Alternative: support
-  older + add Jason. Recommendation: pin.
-- **D4 — `⊢` as the ratified glyph** in renders (Frege's judgment stroke:
-  content proposed vs content asserted). Recommendation: adopt.
+- **D1 — `req` as the sole dependency.** **Ratified 2026-08-05.**
+- **D2 — escript distribution.** **Ratified 2026-08-05.**
+- **D3 — pin Elixir ≥ 1.18 / OTP ≥ 27** for stdlib JSON. **Ratified 2026-08-05.**
+- **D4 — `⊢` as the ratified glyph.** **Ratified 2026-08-05, display-only:**
+  the glyph exists solely in renderer output. The journal stores
+  `"state": "ratified"`; the operator types `socrates ratify <id>`, never the
+  glyph; nothing ever parses it. (`--ascii` render flag may fall back to `|-`.)
+
+## Open question — type set revision (operator-proposed 2026-08-05)
+
+Proposed replacement/supplement for the v0 types, from the operator's
+practical-syllogism example (`canon/practical-syllogism.md` if adopted):
+`attest` / `infer` / `act` (prescription) / `did` (record), retaining `def` and
+`ref` as machinery types. Under evaluation; the loadout section above is
+superseded by whatever this resolves to. See canon annotations for the gate
+findings the example itself carries.
