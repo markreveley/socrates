@@ -24,3 +24,15 @@ Read in order:
 3. [**03-research-spike.md**](03-research-spike.md) — the repo's core
    theories and assertions, each tested against external literature and
    prior art: what supports them, what resists them, and honest verdicts.
+4. [**04-transfer-study.md**](04-transfer-study.md) — could the docs and
+   the code's intent be expressed in socrates itself? What transfers
+   (defs, the purpose argument, decisions), what must stay prose (the
+   tutorial), and why the transfer is a ratification workload, not a
+   migration. Filed with [`plans/0001-post-build-review.md`](../plans/0001-post-build-review.md),
+   the post-build review of the code, docs, and tutorial.
+
+Alongside the reading order:
+[**code-walkthrough.md**](code-walkthrough.md) — the tutorial: the 0001
+code module by module, two end-to-end traces (`add` and `intake`), the
+tests as executable spec, and exercises. Read it with the built escript in
+hand.
