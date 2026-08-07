@@ -103,8 +103,9 @@ example and acceptance fixture ·
 [practical-syllogism](canon/practical-syllogism.md) — settled the type set.
 
 Explanatory (non-normative): [docs/](docs/README.md) — purpose and
-architecture in plain words, plus a research spike testing the core claims
-against outside evidence.
+architecture in plain words, a research spike testing the core claims
+against outside evidence, and [terminology](docs/terminology.md), the
+glossary of every term the repo uses precisely.
 
 The session all of this descends from is captured verbatim as the **master
 thread** at `direction → socrates_2/threads/2026-08-05-master-thread.md`. This
