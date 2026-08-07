@@ -38,8 +38,15 @@ Read in order:
    judge-as-annotator, the dosage that avoids T5-at-volume, and a
    zero-build version that fits inside week one.
 
-Alongside the reading order:
-[**code-walkthrough.md**](code-walkthrough.md) — the tutorial: the 0001
-code module by module, two end-to-end traces (`add` and `intake`), the
-tests as executable spec, and exercises. Read it with the built escript in
-hand.
+Alongside the reading order — reference, consulted rather than read through:
+
+- [**terminology.md**](terminology.md) — the glossary: every term the repo
+  uses precisely, defined and pointed back at the file that fixes it.
+  Statements and their fields, the three identities, the store and the
+  graph, the gate and the harness, the designed-not-built vocabulary of
+  plans 0002–0006 (including the **patch** / **changeset** split), and a
+  closing list of words this repo uses in more than one sense.
+- [**code-walkthrough.md**](code-walkthrough.md) — the tutorial: the 0001
+  code module by module, two end-to-end traces (`add` and `intake`), the
+  tests as executable spec, and exercises. Read it with the built escript in
+  hand.
